@@ -51,12 +51,31 @@ class CalculatorSuite extends FunSuite with ShouldMatchers {
     assert(resultRed2() == "red")
   }
 
-  test("computeSolutions") {
+  test("computeSolutionsTwo") {
     val input = Vector(2, 5, 3)
     val determinate = Polynomial.computeDelta(Var(input(0)), Var(input(1)), Var(input(2)))
     assert(determinate() == 1)
     val solutions = Polynomial.computeSolutions(Var(input(0)), Var(input(1)), Var(input(2)), determinate)
     assert(solutions() == Set(-1, -1.5))
+  }
+
+  test("computeSolutionsNone") {
+    val input = Vector(1, 2, 1)
+    val determinate = Polynomial.computeDelta(Var(input(0)), Var(input(1)), Var(input(2)))
+    assert(determinate() == -0)
+  }
+
+  test("computeValuesCyclic") {
+    val v1 = new Literal(3)
+    val b = new Ref("b")
+    val a = new Ref("a")
+    val va: Signal[Expr] = Signal{new Plus(v1, b)}
+    val v3 = new Literal(1)
+    val vb: Signal[Expr] = Signal{new Plus(a, v3)}
+    val m = Map(("a", va), ("b", vb))
+
+    val c = Calculator.computeValues(m)
+    assert(c("a").apply() == Double.NaN)
   }
 
 }
