@@ -29,7 +29,17 @@ trait NodeScala {
    *  @param token        the cancellation token
    *  @param body         the response to write back
    */
-  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = ???
+  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = {
+    for (x <- response) {
+      println("Response: " + x)
+      if(token.isCancelled) {
+        exchange.close()
+        return
+      }
+      exchange.write(x)
+    }
+    exchange.close()
+  }
 
   /** A server:
    *  1) creates and starts an http listener
@@ -41,8 +51,24 @@ trait NodeScala {
    *  @param handler        a function mapping a request to a response
    *  @return               a subscription that can stop the server and all its asynchronous operations *entirely*
    */
-  def start(relativePath: String)(handler: Request => Response): Subscription = ???
-
+  def start(relativePath: String)(handler: Request => Response): Subscription = {
+    val listener = createListener(relativePath)
+    val working = Future.run() { ct => 
+      Future {
+        while (ct.nonCancelled) {
+          try {
+            val request = listener.nextRequest().now
+            println("Request!")
+            val response = handler(request._1)
+            respond(request._2, ct, response)
+          } catch {
+            case e: Throwable => Thread.sleep(100)// do nothing
+          }
+        }
+      }
+    }
+    Subscription(working, listener.start())
+  }
 }
 
 
@@ -112,13 +138,13 @@ object NodeScala {
      */
     def nextRequest(): Future[(Request, Exchange)] = {
       val p = Promise[(Request, Exchange)]()
-
       createContext(xchg => {
+        println("In handler")
         val req = xchg.request
+        println("Request: " + req)
         removeContext()
         p.success((req, xchg))
       })
-
       p.future
     }
   }

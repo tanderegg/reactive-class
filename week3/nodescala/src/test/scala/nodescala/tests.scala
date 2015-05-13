@@ -30,9 +30,77 @@ class NodeScalaSuite extends FunSuite {
       case t: TimeoutException => // ok!
     }
   }
+  test("A list of Futures should be all complete or fail") {
+    val l = List[Future[Int]](Future { 1 }, Future { 2 }, Future { 3 })
+    val all = Future.all(l)
 
-  
-  
+    assert(Await.result(all, 250 millis) == List(1, 2, 3))
+  }
+  test("A list of Futures should fail if one fails") {
+    val all = Future.all(List(Future { 1 }, Future { 2 }, Future { throw new Exception }))
+
+    try {
+      Await.result(all, 250 millis)
+      assert(false)
+    } catch {
+      case t: Exception => // ok!
+    }
+  }
+  test("A list of Futures should return any result") {
+    val any = Future.any(List(Future { 1 }, Future { 2 }, Future { throw new Exception }))
+
+    try {
+      assert(List(1, 2).contains(Await.result(any, 100 millis)))
+    } catch {
+      case t: Exception => // ok!
+    }
+  }
+  test("A delay should happen for t seconds") {
+    val delay = Future.delay(1000 millis)
+    Thread.sleep(500)
+    assert(delay.isCompleted == false)
+  }
+
+  test("Now should return the value of an immediate result") {
+    val f = Future { 3 }
+    assert(f.now == 3)
+  }
+  test("Now should throw an exception of a non-immediate result") {
+    val f = Future { Thread.sleep(100); 3 }
+    try {
+      f.now
+      assert(false)
+    } catch {
+      case e: NoSuchElementException => // ok!
+    }
+  }
+  test("ContinueWith should concatenate two futures") {
+    val f1 = Future { 3 }
+    val f2 = Future { 2 }
+    val f3 = f1.continueWith(f2 => { "test" })
+    assert(Await.result(f3, 100 millis) == "test")
+  }
+  test("Continue should concatenate the result of a future onto another future") {
+    val f1 = Future { 3 }
+    val t = Try(2)
+    val f2 = f1.continue(t => { "test" })
+    assert(Await.result(f2, 500 millis) == "test")
+  }
+  test("Run should allow a computation to be cancelled") {
+    val working = Future.run() { ct =>
+      Future {
+        while (ct.nonCancelled) {
+          println("working")
+        }
+        println("done")
+        assert(true)
+      }
+    }
+    Future.delay(250 nanos) onSuccess {
+      case _ => working.unsubscribe()
+    }
+  }
+
   class DummyExchange(val request: Request) extends Exchange {
     @volatile var response = ""
     val loaded = Promise[String]()
@@ -113,9 +181,4 @@ class NodeScalaSuite extends FunSuite {
 
     dummySubscription.unsubscribe()
   }
-
 }
-
-
-
-
